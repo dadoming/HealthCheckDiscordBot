@@ -12,40 +12,11 @@
 
 ## When main is called , the bot will check if there are channels and will grab the last information from them
 
-## Types of commands:
-## 1. BotON
-## 2. BotOFF
-## 3. PingTemp Name URL interval times -> Pings the URL every interval
-##    PingPerm Name URL interval -> Pings the URL every interval
-## 4. Help
-## 5. Status -> Shows the status of the bot (active or inactive)
-##           -> If active shows what he is doing
-## 6. Clean -> Cleans the temporary services that have existed for more than 5 minutes
-##
 
 ## Há servicos permanentes e temporarios porque os temporarios sao para mandar um certo numero de pings e os permanentes sao para ficar pinging para sempre
 ### assim o bot tem mais facilidade em questoes de limpeza e de organizacao
 #### Implementar um sistema de limpeza para os servicos temporarios que ja acabaram (Cleaning Thread)
 
-# Service Class:
-#  Variables:
-#    - url: String
-#    - interval: int
-#    - active: Boolean
-#    - timeOfLastPing: DateTime
-#    - timeOfLastResponse: DateTime
-#    - responseCode: int
-#    - responseTime: int
-#    - responseMessage: String
-#  Methods:
-
-# Bot Class:
-#  Variables:
-#    - active: Boolean
-#    - permanentServices: List of Services
-#    - temporaryServices: List of Services
-#    - info: String(JSON)
-# listen_to_commands
 
 import os
 import discord
@@ -55,21 +26,87 @@ import requests
 import threading
 import time
 import json
+import datetime
+from datetime import timedelta
 
-## Make help/handle/error strings global
-#  {
-#    name of command: "BotOn" | full command: "BotOn" | help message
-#  }
-# strings = {
-#    "BotOn": "-> BotON: Turns the bot on, starting again the Health Check services\n",
-#    "BotOff": "-> BotOFF: Turns the bot off, stopping all pings for the Health Check services\n",
-#    "PingTemp": "-> PingTemp Name(Channel) URL Interval(seconds) Times(Total pings): Starts the Heath Check on a service for n_Times\n",
-#    "PingPerm": "-> PingPerm: Name(Channel) URL Interval(seconds): Starts the Health Check forever on a service until stopped\n",
-#    "Stop": "-> Stop Name(Channel): Stops the Health Check on a service\n",
-#    "Help": "-> help <command>...<n>...<command>: Shows the list of commands, optional keywords \{bot, ping, status, export\}\n",
-#    "Export": "-> Export Name(Channel): Exports the information of the services to a JSON file and allows it to be downloaded\n",
-#    "Status": "-> Status: Shows the status of the bot and all Active Health Checks (active or inactive)\n",
-# }
+
+class CustomEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, timedelta):
+            return str(obj)
+        return super().default(obj)
+
+
+class Service:
+    def __init__(self, name, url, interval, times, type):
+        print(f"Service {name} created")
+        self.url = url
+        self.interval = interval
+        self.times = times
+        self.active = True
+        self.timeOfLastPing = ""
+        self.timeOfLastResponse = ""
+        self.responseCode = 0
+        self.responseTime = 0
+        self.responseMessage = ""
+        self.thread = None
+        self.stop_event = threading.Event()
+        self.lock = threading.Lock()
+        self.channel = None
+        self.type = type
+        self.name = name
+
+    def restart_service(self, name, url, interval, times, type):
+        self.url = url
+        self.interval = interval
+        self.type = type
+        self.times = times
+        self.active = True
+        self.thread = None
+        self.stop_event = threading.Event()
+        self.lock = threading.Lock()
+
+    def start_pinging(self):
+        self.active = True
+        while not self.stop_event.is_set():
+            with self.lock:
+                if not self.active:
+                    break
+            try:
+                print(f"Pinging {self.url}")
+                response = requests.get(self.url)
+                self.timeOfLastPing = response.elapsed
+                self.timeOfLastResponse = response.elapsed
+                self.responseCode = response.status_code
+                self.responseTime = response.elapsed
+                self.responseMessage = response.text
+                print(
+                    f"Response from {self.url}: {self.responseCode} - {self.responseTime} - {self.responseMessage}"
+                )
+            except Exception as error:
+                print(f"Error occurred while pinging {self.url}: {error}")
+                self.active = False
+            with self.lock:
+                if self.times != float("inf"):
+                    self.times -= 1
+                    if self.times <= 0:
+                        break
+            time.sleep(self.interval)
+        self.active = False
+
+    def stop_service(self):
+        self.stop_event.set()
+
+    def join_thread(self):
+        if self.thread:
+            self.thread.join()
+
+    def reset_values(self):
+        self.active = False
+        self.responseCode = 0
+        self.responseTime = 0
+        self.responseMessage = ""
+        self.thread = None
 
 
 class Bot(commands.Bot):
@@ -80,11 +117,14 @@ class Bot(commands.Bot):
         self.active = False
         self.permanentServices = {}
         self.temporaryServices = {}
+        self.threads = {}
         # check if there are guilds and if there are, get the last msg from each channel
-        if self.guilds:
-            for guild in self.guilds:
-                for channel in guild.text_channels:
-                    print(channel)
+        # channels = self.get_all_channels()
+        # print(channels)
+        # if channels:
+        #     for guild in self.guilds:
+        #         for channel in guild.text_channels:
+        #             print(channel)
 
     async def on_message(self, message: discord.Message):
         if message.author == self.user:
@@ -93,9 +133,7 @@ class Bot(commands.Bot):
             f"{message.channel}: {message.author}: {message.author.name}: {message.content}"
         )
         params = message.content.split(" ")
-        print(f"Params: {params} len: {len(params)}")
         params[0] = params[0].lower()
-        print(f"Params: {params} len: {len(params)}")
         await self.which_cmd(params, message)
 
     async def which_cmd(self, params, message):
@@ -104,10 +142,14 @@ class Bot(commands.Bot):
         elif params[0] == "!botoff":
             await self.botCommands.bot_off(message.channel)
         elif params[0] == "!pingtemp":
-            await self.botCommands.start_health_check(message.channel, params, "temp")
+            await self.botCommands.start_health_check(
+                message.channel, message, params, "temp"
+            )
         elif params[0] == "!pingperm":
-            await self.botCommands.start_health_check(message.channel, params, "perm")
-        elif params[0] == "!stoptemp":
+            await self.botCommands.start_health_check(
+                message.channel, message, params, "perm"
+            )
+        elif params[0] == "!stop":
             await self.botCommands.stop_running_service(message.channel, params)
         elif params[0] == "!help":
             await self.botCommands.help(message.channel, params)
@@ -123,8 +165,7 @@ class Bot(commands.Bot):
     async def on_ready(self):
         print(f"We have logged in as {self.user.name}")
 
-    async def setup_channel(self, name):
-        guild = await self.create_guild(name)
+    async def setup_channel(self, name, guild):
         channel = await guild.create_text_channel(
             name,
             overwrites={
@@ -140,9 +181,11 @@ class Bot(commands.Bot):
             service.stop_service()
             service.join_thread()
             await channel.send(f"Service {service_name} stopped")
+            print(f"Service {service_name} stopped")
             service.reset_values()
         else:
             await channel.send(f"No service with name {service_name} found")
+            print(f"No service with name {service_name} found")
 
 
 command_table = {
@@ -208,6 +251,7 @@ class BotCommands:
                 service.thread = threading.Thread(target=self.bot.start_pinging)
                 service.thread.start()
 
+    # TODO: Is not stopping the threads
     async def bot_off(self, channel):
         if not self.bot.active:
             await channel.send("Bot is already inactive")
@@ -216,6 +260,7 @@ class BotCommands:
                 self.bot.stop_service(channel, service.name)
         if self.bot.permanentServices:
             for service in self.bot.permanentServices.values():
+                print(f"--> Stopping {service.name}")
                 service.stop_service(channel, service.name)
         self.bot.active = False
         await channel.send("Bot is now inactive")
@@ -227,7 +272,7 @@ class BotCommands:
         service_name = params[1]
         await self.bot.stop_service(channel, service_name)
 
-    async def start_health_check(self, channel, params, type):
+    async def start_health_check(self, channel, message, params, type):
         if not self.bot.active:
             await channel.send("Bot is inactive, do !boton")
             return
@@ -238,15 +283,16 @@ class BotCommands:
             await channel.send(invalid_cmd_msg_formater("PingPerm"))
             return
 
-        url = params[1]
-        name = params[2]
+        name = params[1]
+        url = params[2]
         try:
             interval = int(params[3])
             if interval <= 10:
                 await channel.send("Do an interval greater than 10 seconds")
+                return
             if len(params) < 5 and type == "temp":
                 times = int(params[4])
-            if times <= 0 and type == "temp":
+            if type == "temp" and times <= 0:
                 await channel.send("Times must be greater than 0")
             elif type == "perm":
                 times = float("inf")
@@ -266,7 +312,7 @@ class BotCommands:
         if name in self.bot.temporaryServices and type == "perm":
             service = self.bot.temporaryServices[name]
             self.bot.temporaryServices.pop(name)
-            service.restart_service(url, name, interval, times, type)
+            service.restart_service(name, url, interval, times, type)
             self.bot.permanentServices[name] = service
             await channel.send(f"Service {name} added to the permanent services")
         elif name in self.bot.permanentServices and type == "temp":
@@ -274,12 +320,16 @@ class BotCommands:
                 f"Service {name} is already permanent so it cannot be temporary, remove it first"
             )
         else:
-            service = Service(url, name, interval, times, type)
-            service.channel = await self.bot.setup_channel(name)
+            service = Service(name, url, interval, times, type)
+            service.channel = await self.bot.setup_channel(name, message.guild)
             self.bot.temporaryServices[name] = service
-            await channel.send(f"Service {url} added to the temporary services")
-        service.thread = threading.Thread(target=self.bot.start_pinging)
-        service.thread.start()
+            await channel.send(f"Service {url} added to the Health Check services")
+
+        if (service.name not in self.bot.threads) or (
+            not self.bot.threads[service.name].is_alive()
+        ):
+            service.thread = threading.Thread(target=service.start_pinging)
+            service.thread.start()
 
     async def help(self, channel, params):
         print(f"Params: {params} len {len(params)}")
@@ -320,6 +370,7 @@ class BotCommands:
                 send_string = "Invalid command"
             await channel.send(send_string)
 
+    # TODO printing inative and still has services rolling
     async def status(self, channel, params):
         if self.bot.active:
             send_string = "Active\n"
@@ -340,8 +391,7 @@ class BotCommands:
             await channel.send(invalid_cmd_msg_formater("Export"))
             return
         service_name = params[1]
-        filename = f"exports/{service_name}.json"
-        # provide download link
+
         if service_name in self.bot.permanentServices:
             service = self.bot.permanentServices[service_name]
         elif service_name in self.bot.temporaryServices:
@@ -349,12 +399,31 @@ class BotCommands:
         else:
             await channel.send(f"No service with name {service_name} found")
             return
+
+        filename = f"exports/{service_name}.json"
+
+        # put time in json
+        data = {
+            "url": str(service.url),
+            "interval": str(service.interval),
+            "active": str(service.active),
+            "timeOfLastPing": str(service.timeOfLastPing),
+            "timeOfLastResponse": str(service.timeOfLastResponse),
+            "responseCode": str(service.responseCode),
+            "responseTime": str(service.responseTime),
+            "responseMessage": str(service.responseMessage),
+            "name": str(service.name),
+        }
+
+        json_string = json.dumps(data, cls=CustomEncoder)
         with open(filename, "w") as file:
-            file.write(json.dumps(service.__dict__))
+            file.write(json_string)
 
         file = discord.File(filename, filename=filename, spoiler=False)
         await channel.send("Here is your file!", file=file)
 
+    ## Clean the temporary services that have existed for more than 5 minutes
+    ## TODO: Implement a cleaning thread that will clean the temporary services that have existed for more than 5 minutes
     async def clean(self, channel, params):
         if self.bot.temporaryServices:
             for service in self.bot.temporaryServices.values():
@@ -363,76 +432,6 @@ class BotCommands:
                     await channel.send(f"Service {service.name} removed")
         else:
             await channel.send("No temporary services to clean")
-
-
-class Service:
-    def __init__(self, url, interval, times, type):
-        self.url = url
-        self.interval = interval
-        self.times = times
-        self.active = True
-        self.timeOfLastPing = ""
-        self.timeOfLastResponse = ""
-        self.responseCode = 0
-        self.responseTime = 0
-        self.responseMessage = ""
-        self.thread = None
-        self.stop_event = threading.Event()
-        self.lock = threading.Lock()
-        self.channel = None
-        self.type = type
-
-    def restart_service(self, url, name, interval, times, type):
-        self.url = url
-        self.interval = interval
-        self.type = type
-        self.times = times
-        self.active = True
-        self.thread = None
-        self.stop_event = threading.Event()
-        self.lock = threading.Lock()
-
-    def start_pinging(self):
-        self.thread.start()
-        self.active = True
-        while not self.stop_event.is_set():
-            with self.lock:
-                if not self.active:
-                    break
-            try:
-                response = requests.get(self.url)
-                self.timeOfLastPing = response.elapsed
-                self.timeOfLastResponse = response.elapsed
-                self.responseCode = response.status_code
-                self.responseTime = response.elapsed
-                self.responseMessage = response.text
-                print(
-                    f"Response from {self.url}: {self.responseCode} - {self.responseTime} - {self.responseMessage}"
-                )
-            except Exception as error:
-                print(f"Error occurred while pinging {self.url}: {error}")
-                self.active = False
-            with self.lock:
-                if self.times != float("inf"):
-                    self.times -= 1
-                    if self.times <= 0:
-                        break
-            time.sleep(self.interval)
-        self.active = False
-
-    def stop_service(self):
-        self.stop_event.set()
-
-    def join_thread(self):
-        if self.thread:
-            self.thread.join()
-
-    def reset_values(self):
-        self.active = False
-        self.responseCode = 0
-        self.responseTime = 0
-        self.responseMessage = ""
-        self.thread = None
 
 
 def main():
