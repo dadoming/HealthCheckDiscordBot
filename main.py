@@ -1,22 +1,12 @@
-## Make the bot react to a message when received
-## Make the bot be on and off upon command
-## Make the bot be able to start looping in ping loop, this means constantly pinging the url's (every minute?)
-## Link the bot to a mongoDB database to store the information of the services and make a search through the database to see if the service is already there
-##  if it is, then continue adding it to that id. This happens by url, if the url is the same, then it is the same service
-
 ## ONCE THE TEMP COMMAND IS GIVEN, THE BOT WILL CREATE A CHANNEL FOR THE SERVICE AND START PINGING THE URL
 ## Thus removing the need for the interval, the bot will ping the url every minute and store the information in the database
 ## or there is no need to store the information in the database, the bot will just store the information in the service object
 
-### CREATE AN EXPORT COMMAND THAT WILL EXPORT THE INFORMATION OF THE SERVICES TO A JSON FILE
-
 ## When main is called , the bot will check if there are channels and will grab the last information from them
-
 
 ## Há servicos permanentes e temporarios porque os temporarios sao para mandar um certo numero de pings e os permanentes sao para ficar pinging para sempre
 ### assim o bot tem mais facilidade em questoes de limpeza e de organizacao
 #### Implementar um sistema de limpeza para os servicos temporarios que ja acabaram (Cleaning Thread)
-
 
 import os
 import discord
@@ -28,6 +18,53 @@ import time
 import json
 import datetime
 from datetime import timedelta
+
+command_table = {
+    "BotOn": {
+        "full_command": "BotOn",
+        "help_message": "Turns the bot on, starting again the Health Check services\n",
+    },
+    "BotOff": {
+        "full_command": "BotOff",
+        "help_message": "Turns the bot off, stopping all pings for the Health Check services\n",
+    },
+    "PingTemp": {
+        "full_command": "PingTemp Name(Channel) URL Interval(seconds) Times(Total pings)",
+        "help_message": "Starts the Heath Check on a service for n_Times\n",
+    },
+    "PingPerm": {
+        "full_command": "PingPerm Name(Channel) URL Interval(seconds)",
+        "help_message": "Starts the Health Check forever on a service until stopped\n",
+    },
+    "Stop": {
+        "full_command": "Stop Name(Channel)",
+        "help_message": "Stops the Health Check on a service\n",
+    },
+    "Help": {
+        "full_command": "Help <command>...<n>...<command>",
+        "help_message": "Shows the list of commands, optional keywords \{bot, ping, status, export\}\n",
+    },
+    "Export": {
+        "full_command": "Export Name(Channel)",
+        "help_message": "Exports the information of the services to a JSON file and allows it to be downloaded\n",
+    },
+    "Status": {
+        "full_command": "Status",
+        "help_message": "Shows the status of the bot and all Active Health Checks (active or inactive)\n",
+    },
+    "Clean": {
+        "full_command": "Clean",
+        "help_message": "Cleans the temporary services that have existed for more than 5 minutes\n",
+    },
+}
+
+
+def invalid_cmd_msg_formater(command: str):
+    return f"Invalid Command, do !{command_table[command]['full_command']}"
+
+
+def print_help_msg(channel, command):
+    return f"-> {command_table[command]['full_command']}: {command_table[command]['help_message']}"
 
 
 class CustomEncoder(json.JSONEncoder):
@@ -107,6 +144,8 @@ class Service:
         self.responseTime = 0
         self.responseMessage = ""
         self.thread = None
+        self.stop_event = threading.Event()
+        self.lock = threading.Lock()
 
 
 class Bot(commands.Bot):
@@ -186,54 +225,6 @@ class Bot(commands.Bot):
         else:
             await channel.send(f"No service with name {service_name} found")
             print(f"No service with name {service_name} found")
-
-
-command_table = {
-    "BotOn": {
-        "full_command": "BotOn",
-        "help_message": "Turns the bot on, starting again the Health Check services\n",
-    },
-    "BotOff": {
-        "full_command": "BotOff",
-        "help_message": "Turns the bot off, stopping all pings for the Health Check services\n",
-    },
-    "PingTemp": {
-        "full_command": "PingTemp Name(Channel) URL Interval(seconds) Times(Total pings)",
-        "help_message": "Starts the Heath Check on a service for n_Times\n",
-    },
-    "PingPerm": {
-        "full_command": "PingPerm Name(Channel) URL Interval(seconds)",
-        "help_message": "Starts the Health Check forever on a service until stopped\n",
-    },
-    "Stop": {
-        "full_command": "Stop Name(Channel)",
-        "help_message": "Stops the Health Check on a service\n",
-    },
-    "Help": {
-        "full_command": "Help <command>...<n>...<command>",
-        "help_message": "Shows the list of commands, optional keywords \{bot, ping, status, export\}\n",
-    },
-    "Export": {
-        "full_command": "Export Name(Channel)",
-        "help_message": "Exports the information of the services to a JSON file and allows it to be downloaded\n",
-    },
-    "Status": {
-        "full_command": "Status",
-        "help_message": "Shows the status of the bot and all Active Health Checks (active or inactive)\n",
-    },
-    "Clean": {
-        "full_command": "Clean",
-        "help_message": "Cleans the temporary services that have existed for more than 5 minutes\n",
-    },
-}
-
-
-def invalid_cmd_msg_formater(command: str):
-    return f"Invalid Command, do !{command_table[command]['full_command']}"
-
-
-def print_help_msg(channel, command):
-    return f"-> {command_table[command]['full_command']}: {command_table[command]['help_message']}"
 
 
 class BotCommands:
