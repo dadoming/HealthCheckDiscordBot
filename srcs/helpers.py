@@ -5,7 +5,7 @@ from discord import utils
 command_table = {
     "ping": {
         "full_command": "!ping <channel_name> <url> <interval>",
-        "help_message": "Starts the Health Check on a service for every time interval until removed\n",
+        "help_message": "Adds a new health check to the bot. The bot will check the health of the given URL every <interval> seconds and send a message to the warning-channel if the health is down.\n",
     },
     "help": {
         "full_command": "!help",
@@ -13,7 +13,7 @@ command_table = {
     },
     "export": {
         "full_command": "!export <channel_name>",
-        "help_message": "Exports the information of the services to a JSON file and allows it to be downloaded\n",
+        "help_message": "Exports the whole channel health check to a file.\n",
     },
     "status": {
         "full_command": "!status",

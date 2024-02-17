@@ -5,9 +5,20 @@ import requests
 
 
 class Service:
-    def __init__(self, name, url, interval, chan, warningChannel):
+    def __init__(
+        self,
+        name,
+        url,
+        interval,
+        chan: discord.TextChannel,
+        warningChannel: discord.TextChannel,
+    ):
         self.name = name
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = "http://" + url
         self.url = url
+        if interval < 5:
+            interval = 5
         self.interval = interval
         self.date = None
         self.time = None
@@ -17,7 +28,7 @@ class Service:
         self.channel = chan if chan is not None else None
         self.task = tasks.loop(seconds=interval)(self.execute_task)
 
-    async def start(self, curr_guild):
+    async def start(self, curr_guild: discord.Guild):
         if not self.channel:
             self.channel = await curr_guild.create_text_channel(
                 self.name,
@@ -35,7 +46,7 @@ class Service:
         self.task.stop()
 
     def __str__(self):
-        return f"{self.name} {self.url} {self.interval} {self.times}"
+        return f"{self.name} {self.url} {self.interval}"
 
     def msg_formater(self):
         return f"{self.numeric} {self.status} {self.date} {self.time}"
@@ -46,18 +57,24 @@ class Service:
 
     async def execute_task(self):
         try:
-            response = requests.get(self.url, timeout=15)
-            self.numeric = response.status_code
-            response.raise_for_status()
-            self.status = self.numeric != 500 and "OK" or "KO"
-            self.load_time()
-            await self.channel.send(self.msg_formater())
+            if self.channel:
+                if self.channel.guild.get_channel(self.channel.id) is not None:
+                    response = requests.get(self.url, timeout=15)
+                    self.numeric = response.status_code
+                    response.raise_for_status()
+                    self.status = self.numeric != 500 and "OK" or "KO"
+                    self.load_time()
+                    await self.channel.send(self.msg_formater())
         except requests.Timeout:
             self.numeric = 408
             self.status = "KO"
             self.load_time()
             msg = self.msg_formater()
-            await self.channel.send(msg)
+            if (
+                self.channel
+                and self.channel.guild.get_channel(self.channel.id) is not None
+            ):
+                await self.channel.send(msg)
         except requests.RequestException as e:
             if e.response:
                 self.numeric = e.response.status_code if e.response else 500
@@ -66,4 +83,8 @@ class Service:
             self.status = "KO"
             self.load_time()
             msg = self.msg_formater()
-            await self.channel.send(msg)
+            if (
+                self.channel
+                and self.channel.guild.get_channel(self.channel.id) is not None
+            ):
+                await self.channel.send(msg)

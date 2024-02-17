@@ -44,11 +44,11 @@ class Bot(commands.Bot):
     async def on_ready(self):
         self.myGuild = self.get_guild(int(getenv("GUILD_ID")))
         self.console_log("Online", "🟢")
-        self.console_log("Getting all disconnected services", "🔍")
         channels = self.get_channels_from_discord()
         await self.create_warning_channel()
         self.monitor = Monitor(self.warning_channel)
         self.monitor.start()
+        self.console_log("Getting all disconnected services", "🔍")
         restarted_services = []
         all_services = []
         if channels:
@@ -70,9 +70,17 @@ class Bot(commands.Bot):
             self.console_log("No services found to restart", "😐")
 
     async def create_warning_channel(self):
-        warning_channel = discord.utils.get(
-            self.myGuild.text_channels, name="warning-channel"
+        ## find any channel that includes warning-channel, the channel can have other things in the string
+        channels = self.myGuild.text_channels
+        channels = list(
+            filter(
+                lambda x: "warning-channel" in x.name.lower(),
+                channels,
+            )
         )
+        warning_channel = None
+        if channels:
+            warning_channel = channels[0]
         if not warning_channel:
             self.console_log("Creating warning channel", "🟢")
             self.warning_channel = await self.myGuild.create_text_channel(
@@ -89,8 +97,9 @@ class Bot(commands.Bot):
         await self.warning_channel.set_permissions(
             self.myGuild.default_role, send_messages=False
         )
+        await self.warning_channel.edit(name="🟢-warning-channel")
 
-    async def turn_on_service(self, channel_topic, channel):
+    async def turn_on_service(self, channel_topic, channel: discord.TextChannel):
         name = channel_topic[1]
         url = channel_topic[2]
         interval = int(channel_topic[3])
@@ -111,8 +120,14 @@ class Bot(commands.Bot):
             await channel.send(invalid_cmd_msg_formater("ping"))
             return
         self.console_log("Received ping command: " + " ".join(params), "🔔")
-        if int(params[3]) <= 0:
-            await channel.send("Interval must be greater than 0")
+        try:
+            num = int(params[3])
+            if num <= 0:
+                await channel.send("Interval must be greater than 0")
+                self.console_log("Contains invalid interval", "❌")
+                return
+        except ValueError:
+            await channel.send("Interval must be a number")
             self.console_log("Contains invalid interval", "❌")
             return
         full_list = self.get_channels_from_discord()
@@ -131,16 +146,17 @@ class Bot(commands.Bot):
         if len(params) < 2:
             await channel.send(invalid_cmd_msg_formater("stop"))
             return
-        if params[2] == "option":
-            self.reload_channels_from_discord()
-            self.console_log("Received remove command: " + " ".join(params), "🔔")
+        if len(params) == 3:
+            if params[2] == "option":
+                self.reload_channels_from_discord()
+                self.console_log("Received remove command: " + " ".join(params), "🔔")
         service_name = params[1]
-        service = self.services.get(service_name)
+        service: Service = self.services.get(service_name)
         if service:
             await service.stop()
             await service.channel.delete()
             del self.services[service_name]
-            self.monitor.remove_service(service)
+            await self.monitor.remove_service(service)
             await channel.send(f"Service {service_name} removed")
             self.console_log("Service " + service_name + " removed", "✅")
         else:
