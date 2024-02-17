@@ -37,6 +37,13 @@ class Monitor:
         self.services[service.name] = service
         self.current_status[service.name] = "OK"
         self.previous_status[service.name] = "OK"
+        isAnyServiceKO = any(
+            service.status == "KO" for service in self.services.values()
+        )
+        if isAnyServiceKO:
+            self.warningChannel.edit(name="🔴-warning-channel")
+        else:
+            self.warningChannel.edit(name="🟢-warning-channel")
 
     async def remove_service(self, service):
         del self.services[service.name]

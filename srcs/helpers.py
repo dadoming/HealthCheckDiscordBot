@@ -1,6 +1,7 @@
 import json
 from datetime import timedelta
 from discord import utils
+import os
 
 command_table = {
     "ping": {
@@ -28,6 +29,12 @@ command_table = {
         "help_message": "Removes specified Health Check\n",
     },
 }
+
+
+def create_exports_directory():
+    directory = "exports"
+    if not os.path.exists(directory):
+        os.makedirs(directory)
 
 
 class col:

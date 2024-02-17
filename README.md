@@ -5,6 +5,10 @@ This bot is designed to manage the health state of api's. It will check the heal
 The warning-channel has a visual reference to know the state, meaning:
 a green ball if all the endpoints give OK responses, and a red ball if at least one is KO.
 
+If the bot is stopped and started again, it will bring back all the health checks that were previously added and update the warning-channel state.
+
+The bot is designed to be used in a single server.
+
 Created using [discord.py](https://github.com/Rapptz/discord.py).
 
 ## Creating a Discord Developer Account
@@ -35,19 +39,19 @@ To run the bot, you must first run the virtual environment and then run the bot.
 
 1. Create a virtual environment by running the following command in the root of the project:
 ```
-python -m venv venv
+python3 -m venv bot-env
 ```
 2. Activate the virtual environment by running the following command:
 ```
-source venv/bin/activate
+source bot-env/bin/activate
 ```
 3. Install the required packages by running the following command:
 ```
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 ```
 4. Run the bot by running the following command:
 ```
-python main.py
+python3 main.py
 ```
 
 # Commands
