@@ -70,7 +70,6 @@ class Bot(commands.Bot):
             self.console_log("No services found to restart", "😐")
 
     async def create_warning_channel(self):
-        ## find any channel that includes warning-channel, the channel can have other things in the string
         channels = self.myGuild.text_channels
         channels = list(
             filter(
