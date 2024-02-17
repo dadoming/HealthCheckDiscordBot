@@ -1,4 +1,5 @@
-exports/*
+exports/*.json
+bot-env/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
