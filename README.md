@@ -1,10 +1,13 @@
-# Discord Bot to manage health state of api's
+# API Endpoint Health Check Discord Bot
 
 This bot is designed to manage the health state of api's. It will check the health based on the numeric response got from the endpoint and send a message to a warning-channel if the api is down, and if it's up again.
 
+The warning-channel has a visual reference to know the state, meaning:
+a green ball if all the endpoints give OK responses, and a red ball if at least one is KO.
+
 Created using [discord.py](https://github.com/Rapptz/discord.py).
 
-# Creating a Discord Developer Account
+## Creating a Discord Developer Account
 
 First you need to create a Discord Developer Account and set up a bot:
 
@@ -16,7 +19,7 @@ First you need to create a Discord Developer Account and set up a bot:
 DISCORD_TOKEN=your_token
 ```
 
-# Inviting the Bot to your Server
+## Inviting the Bot to your Server
 
 To invite the bot to your server, follow these steps:
 
