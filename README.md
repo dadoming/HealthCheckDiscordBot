@@ -66,4 +66,4 @@ The bot has the following commands:
 - `!export <channel_name>`: Exports the whole channel health check to a file.
 - `!clean`: Removes all the health checks from the bot and cleans the warning-channel.
 - `!remove`: Removes the health check from the bot.
-- `!clean_warning_channel`: Removes all the messages from the warning-channel that are not pings from the bot.
+- `!clean_warning_channel`: Removes all the messages from the warning-channel.
