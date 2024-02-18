@@ -28,6 +28,10 @@ command_table = {
         "full_command": "!remove <channel_name>",
         "help_message": "Removes specified Health Check\n",
     },
+    "clean_warning_channel": {
+        "full_command": "!clean_warning_channel",
+        "help_message": "Removes all messages from the warning-channel\n",
+    },
 }
 
 

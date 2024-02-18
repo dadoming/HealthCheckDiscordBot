@@ -5,6 +5,8 @@ This bot is designed to manage the health state of api's. It will check the heal
 The warning-channel has a visual reference to know the state, meaning:
 a green ball if all the endpoints give OK responses, and a red ball if at least one is KO.
 
+The monitoring of the discord channel is done using a background task that runs every 5 seconds. This task removes all the messages that are not pings from the bot, and updates the warning-channel state.
+
 If the bot is stopped and started again, it will bring back all the health checks that were previously added and update the warning-channel state.
 
 The bot is designed to be used in a single server.
@@ -62,5 +64,6 @@ The bot has the following commands:
 - `!ping <channel_name> <url> <interval>`: Adds a new health check to the bot. The bot will check the health of the given URL every `interval` seconds and send a message to the warning-channel if the health is down.
 - `!remove <channel_name>`: Removes the health check from the bot.
 - `!export <channel_name>`: Exports the whole channel health check to a file.
-- `!clean <channel_name>`: Removes all the health checks from the bot.
+- `!clean`: Removes all the health checks from the bot and cleans the warning-channel.
 - `!remove`: Removes the health check from the bot.
+- `!clean_warning_channel`: Removes all the messages from the warning-channel that are not pings from the bot.

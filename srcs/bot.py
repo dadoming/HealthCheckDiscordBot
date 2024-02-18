@@ -27,6 +27,7 @@ class Bot(commands.Bot):
             "status": self.status,
             "export": self.export,
             "clean": self.clean,
+            "clean_warning_channel": None,
             "remove": self.remove,
         }
 
@@ -47,6 +48,7 @@ class Bot(commands.Bot):
         channels = self.get_channels_from_discord()
         await self.create_warning_channel()
         self.monitor = Monitor(self.warning_channel)
+        self.commands_map["clean_warning_channel"] = self.monitor.clean_channel
         self.monitor.start()
         self.console_log("Getting all disconnected services", "🔍")
         restarted_services = []
@@ -106,7 +108,7 @@ class Bot(commands.Bot):
         await service.start(self.myGuild)
         await service.channel.edit(topic=f"!ping {name} {url} {interval}")
         self.services[name] = service
-        self.monitor.add_service(service)
+        await self.monitor.add_service(service)
 
     def console_log(self, msg, emoji=" "):
         date = get_timestamp()
@@ -169,8 +171,9 @@ class Bot(commands.Bot):
             for service in list(self.services.values()):
                 await self.remove(channel, ["remove", service.name, "option"])
             self.services = {}
-            self.console_log("All services removed", "✅")
-            await channel.send("All services removed")
+            await self.monitor.clean()
+            self.console_log("All services removed and monitor restarted", "✅")
+            await channel.send("All services removed and monitor restarted")
         else:
             self.console_log("No services to remove", "😐")
             await channel.send("No services to remove")
@@ -217,6 +220,10 @@ class Bot(commands.Bot):
         if not wanted_channel:
             await wanted_channel.send(f"No service with name {params[1]} found")
             self.console_log("Service " + params[1] + " not found", "❌")
+            return
+        elif wanted_channel.topic is None:
+            await channel.send(f"Can't export {params[1]}")
+            self.console_log(f"Can't export {params[1]}", "❌")
             return
         channel_topic = wanted_channel.topic.split(" ")
         name, url, interval = channel_topic[1], channel_topic[2], channel_topic[3]
@@ -266,6 +273,7 @@ class Bot(commands.Bot):
                 + print_help_msg(channel, "export")
                 + print_help_msg(channel, "status")
                 + print_help_msg(channel, "help")
+                + print_help_msg(channel, "clean_warning_channel")
             )
             await channel.send(send_string)
             return
