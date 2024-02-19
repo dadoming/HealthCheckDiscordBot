@@ -19,6 +19,7 @@ class Bot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
         self.services: Service = {}
         self.myGuild = None
+        self.myChannel = None
         self.monitor = None
         self.channels = None
         self.commands_map = {
@@ -117,66 +118,77 @@ class Bot(commands.Bot):
         )
 
     async def ping_api(self, channel, params):
-        if len(params) < 4:
-            await channel.send(invalid_cmd_msg_formater("ping"))
-            return
-        self.console_log("Received ping command: " + " ".join(params), "🔔")
         try:
-            num = int(params[3])
-            if num <= 0:
-                await channel.send("Interval must be greater than 0")
+            if len(params) < 4:
+                await channel.send(invalid_cmd_msg_formater("ping"))
+                return
+            self.console_log("Received ping command: " + " ".join(params), "🔔")
+            try:
+                num = int(params[3])
+                if num <= 0:
+                    await channel.send("Interval must be greater than 0")
+                    self.console_log("Contains invalid interval", "❌")
+                    return
+            except ValueError:
+                await channel.send("Interval must be a number")
                 self.console_log("Contains invalid interval", "❌")
                 return
-        except ValueError:
-            await channel.send("Interval must be a number")
-            self.console_log("Contains invalid interval", "❌")
-            return
-        full_list = self.get_channels_from_discord()
-        name = params[1]
-        if full_list:
-            for channel in full_list:
-                if channel.name == name:
-                    await channel.send(f"Service {name} already exists")
-                    self.console_log("Channel already exists", "❌")
-                    return
-        await self.turn_on_service(params, None)
-        self.console_log("Service " + name + " started", "✅")
-        await channel.send(f"Service {name} added")
+            full_list = self.get_channels_from_discord()
+            name = params[1]
+            if full_list:
+                for channel in full_list:
+                    if channel.name == name:
+                        await channel.send(f"Service {name} already exists")
+                        self.console_log("Channel already exists", "❌")
+                        return
+            await self.turn_on_service(params, None)
+            self.console_log("Service " + name + " started", "✅")
+            await channel.send(f"Service {name} added")
+        except Exception as e:
+            self.console_log(f"Error: {e}", "❌")
 
     async def remove(self, channel, params):
-        if len(params) < 2:
-            await channel.send(invalid_cmd_msg_formater("stop"))
-            return
-        if len(params) == 3:
-            if params[2] == "option":
-                self.reload_channels_from_discord()
-                self.console_log("Received remove command: " + " ".join(params), "🔔")
-        service_name = params[1]
-        service: Service = self.services.get(service_name)
-        if service:
-            await service.stop()
-            await service.channel.delete()
-            del self.services[service_name]
-            await self.monitor.remove_service(service)
-            await channel.send(f"Service {service_name} removed")
-            self.console_log("Service " + service_name + " removed", "✅")
-        else:
-            await channel.send(f"No service with name {service_name} found")
-            self.console_log("Service " + service_name + " not found", "❌")
+        try:
+            if len(params) < 2:
+                await channel.send(invalid_cmd_msg_formater("stop"))
+                return
+            if len(params) == 3:
+                if params[2] == "option":
+                    self.reload_channels_from_discord()
+                    self.console_log(
+                        "Received remove command: " + " ".join(params), "🔔"
+                    )
+            service_name = params[1]
+            service: Service = self.services.get(service_name)
+            if service:
+                await service.stop()
+                await service.channel.delete()
+                del self.services[service_name]
+                await self.monitor.remove_service(service)
+                await channel.send(f"Service {service_name} removed")
+                self.console_log("Service " + service_name + " removed", "✅")
+            else:
+                await channel.send(f"No service with name {service_name} found")
+                self.console_log("Service " + service_name + " not found", "❌")
+        except Exception as e:
+            self.console_log(f"Error: {e}", "❌")
 
     async def clean(self, channel, params):
-        self.console_log("Received clean command: " + " ".join(params), "🔔")
-        self.reload_channels_from_discord()
-        if self.services:
-            for service in list(self.services.values()):
-                await self.remove(channel, ["remove", service.name, "option"])
-            self.services = {}
-            await self.monitor.clean()
-            self.console_log("All services removed and monitor restarted", "✅")
-            await channel.send("All services removed and monitor restarted")
-        else:
-            self.console_log("No services to remove", "😐")
-            await channel.send("No services to remove")
+        try:
+            self.console_log("Received clean command: " + " ".join(params), "🔔")
+            self.reload_channels_from_discord()
+            if self.services:
+                for service in list(self.services.values()):
+                    await self.remove(channel, ["remove", service.name, "option"])
+                self.services = {}
+                await self.monitor.clean()
+                self.console_log("All services removed and monitor restarted", "✅")
+                await channel.send("All services removed and monitor restarted")
+            else:
+                self.console_log("No services to remove", "😐")
+                await channel.send("No services to remove")
+        except Exception as e:
+            self.console_log(f"Error: {e}", "❌")
 
     async def status(self, channel, params):
         self.console_log("Received status command: " + " ".join(params), "🔔")
@@ -210,57 +222,61 @@ class Bot(commands.Bot):
         self.channels = channels
 
     async def export(self, channel, params):
-        if len(params) < 2:
-            await channel.send(invalid_cmd_msg_formater("Export"))
-            return
-        self.console_log("Received export command: " + " ".join(params), "🔔")
-        wanted_channel: discord.TextChannel = discord.utils.get(
-            self.channels, name=params[1]
-        )
-        if not wanted_channel:
-            await wanted_channel.send(f"No service with name {params[1]} found")
-            self.console_log("Service " + params[1] + " not found", "❌")
-            return
-        elif wanted_channel.topic is None:
-            await channel.send(f"Can't export {params[1]}")
-            self.console_log(f"Can't export {params[1]}", "❌")
-            return
-        channel_topic = wanted_channel.topic.split(" ")
-        name, url, interval = channel_topic[1], channel_topic[2], channel_topic[3]
-        messages = []
-        async for message in wanted_channel.history(limit=None):
-            messages.append(message.content)
-        separated_content = []
-        for message in messages:
-            parts = message.split(" ")
-            if len(parts) >= 4:
-                status = parts[0]
-                code = parts[1]
-                time = parts[2]
-                day = parts[3]
-                json_string = json.dumps(
-                    {"status": status, "code": code, "time": time, "day": day}
-                )
-                separated_content.append(json_string)
-        if separated_content:
-            filename = f"exports/{name}.json"
-            data = {
-                "name": name,
-                "url": url,
-                "interval": int(interval),
-                "messages": separated_content,
-            }
-            json_string = json.dumps(data, cls=CustomEncoder)
-            with open(filename, "w") as file:
-                file.write(json_string)
-            self.console_log(
-                f"File has been exported and can be found at exports/{name}.json", "✅"
+        try:
+            if len(params) < 2:
+                await channel.send(invalid_cmd_msg_formater("Export"))
+                return
+            self.console_log("Received export command: " + " ".join(params), "🔔")
+            wanted_channel: discord.TextChannel = discord.utils.get(
+                self.channels, name=params[1]
             )
-            file = discord.File(filename, filename=filename, spoiler=False)
-            await channel.send("Here is your file!", file=file)
-        else:
-            await channel.send(f"No data to export for {name}")
-            self.console_log(f"No data to export for {name}", "❌")
+            if not wanted_channel:
+                await channel.send(f"No service with name {params[1]} found")
+                self.console_log("Service " + params[1] + " not found", "❌")
+                return
+            elif wanted_channel.topic is None:
+                await channel.send(f"Can't export {params[1]}")
+                self.console_log(f"Can't export {params[1]}", "❌")
+                return
+            channel_topic = wanted_channel.topic.split(" ")
+            name, url, interval = channel_topic[1], channel_topic[2], channel_topic[3]
+            messages = []
+            async for message in wanted_channel.history(limit=None):
+                messages.append(message.content)
+            separated_content = []
+            for message in messages:
+                parts = message.split(" ")
+                if len(parts) >= 4:
+                    status = parts[0]
+                    code = parts[1]
+                    time = parts[2]
+                    day = parts[3]
+                    json_string = json.dumps(
+                        {"status": status, "code": code, "time": time, "day": day}
+                    )
+                    separated_content.append(json_string)
+            if separated_content:
+                filename = f"exports/{name}.json"
+                data = {
+                    "name": name,
+                    "url": url,
+                    "interval": int(interval),
+                    "messages": separated_content,
+                }
+                json_string = json.dumps(data, cls=CustomEncoder)
+                with open(filename, "w") as file:
+                    file.write(json_string)
+                self.console_log(
+                    f"File has been exported and can be found at exports/{name}.json",
+                    "✅",
+                )
+                file = discord.File(filename, filename=filename, spoiler=False)
+                await channel.send("Here is your file!", file=file)
+            else:
+                await channel.send(f"No data to export for {name}")
+                self.console_log(f"No data to export for {name}", "❌")
+        except Exception as e:
+            self.console_log(f"Error: {e}", "❌")
 
     async def help(self, channel, params):
         self.console_log("Received help command: " + " ".join(params), "🔔")

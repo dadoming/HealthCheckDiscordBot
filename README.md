@@ -61,7 +61,7 @@ python3 main.py
 The bot has the following commands:
 
 - `!help`: Shows this list of commands.
-- `!ping <channel_name> <url> <interval>`: Adds a new health check to the bot. The bot will check the health of the given URL every `interval` seconds and send a message to the warning-channel if the health is down.
+- `!ping <channel_name> <url> <interval>`: Adds a new health check to the bot. The bot will check the health of the given URL every `interval` seconds (min: 10s) and send a message to the warning-channel if the health is down.
 - `!remove <channel_name>`: Removes the health check from the bot.
 - `!export <channel_name>`: Exports the whole channel health check to a file.
 - `!clean`: Removes all the health checks from the bot and cleans the warning-channel.

@@ -17,8 +17,8 @@ class Service:
         if not url.startswith("http://") and not url.startswith("https://"):
             url = "http://" + url
         self.url = url
-        if interval < 5:
-            interval = 5
+        if interval < 10:
+            interval = 10
         self.interval = interval
         self.date = None
         self.time = None
@@ -57,24 +57,21 @@ class Service:
 
     async def execute_task(self):
         try:
-            if self.channel:
-                if self.channel.guild.get_channel(self.channel.id) is not None:
-                    response = requests.get(self.url, timeout=15)
-                    self.numeric = response.status_code
-                    response.raise_for_status()
-                    self.status = self.numeric != 500 and "OK" or "KO"
-                    self.load_time()
-                    await self.channel.send(self.msg_formater())
+            response = requests.get(self.url, timeout=15)
+            self.numeric = response.status_code
+            response.raise_for_status()
+            self.status = "OK"
+            self.load_time()
+            if not self.channel:
+                return
+            await self.channel.send(self.msg_formater())
         except requests.Timeout:
             self.numeric = 408
             self.status = "KO"
             self.load_time()
-            msg = self.msg_formater()
-            if (
-                self.channel
-                and self.channel.guild.get_channel(self.channel.id) is not None
-            ):
-                await self.channel.send(msg)
+            if not self.channel:
+                return
+            await self.channel.send(self.msg_formater())
         except requests.RequestException as e:
             if e.response:
                 self.numeric = e.response.status_code if e.response else 500
@@ -82,9 +79,11 @@ class Service:
                 self.numeric = 500
             self.status = "KO"
             self.load_time()
-            msg = self.msg_formater()
-            if (
-                self.channel
-                and self.channel.guild.get_channel(self.channel.id) is not None
-            ):
-                await self.channel.send(msg)
+            if not self.channel:
+                return
+            await self.channel.send(self.msg_formater())
+        except Exception as e:
+            print(f"Error in execute_task: {e}")
+            if not self.channel:
+                return
+            await self.channel.send("Error in execute_task")
