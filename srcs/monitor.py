@@ -1,3 +1,4 @@
+import asyncio
 import discord
 from discord.ext import tasks
 from srcs.service import Service
@@ -46,6 +47,7 @@ class Monitor:
                         await message.delete()
                 elif message.author != self.warningChannel.guild.me:
                     await message.delete()
+                await asyncio.sleep(0.5)
         except Exception as e:
             print(f"Error in remove_command_messages: {e}")
 
@@ -68,7 +70,7 @@ class Monitor:
         self.services = {}
         self.current_status = {}
         self.previous_status = {}
-        self.clean_channel(None, None)
+        await self.clean_channel(None, None)
         await self.define_title()
 
     async def define_title(self):
